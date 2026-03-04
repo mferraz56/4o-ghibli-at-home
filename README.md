@@ -160,7 +160,7 @@ The application runs with a single command, which starts the web server and the 
 
 - **For Production:**
 
-  Use a production-grade WSGI server like Gunicorn. **It is critical to use only ONE worker** because the job queue is in-memory and cannot be shared across multiple processes.
+  Use a production-grade ASGI server such as **uvicorn**. **It is critical to use only ONE worker** because the job queue is in-memory and cannot be shared across multiple processes.
 
   First, install the production dependencies:
 
@@ -173,7 +173,8 @@ The application runs with a single command, which starts the web server and the 
   ```bash
   # The `--workers 1` flag is essential for this application's design.
   # Increase --threads for more concurrent I/O, and --timeout for long-running jobs.
-  gunicorn --workers 1 --threads 4 --timeout 600 -b 0.0.0.0:5000 app:app
+  # using uvicorn since this project now prefers an ASGI server
+  uvicorn app:asgi_app --host 0.0.0.0 --port 5000 --workers 1
   ```
 
 ### App Options<a name="app-options"></a>
@@ -212,11 +213,84 @@ You can now upload an image and start stylizing!
 
 - [ ] Create and configure your `.env` file on the production server.
 - [ ] Update `CORS(app)` in `app.py` to a specific origin for your frontend domain if it's hosted separately.
-- [ ] **Crucially, run with a single worker process (e.g., `gunicorn --workers 1`)** due to the in-memory queue design.
+- [ ] **Crucially, run with a single worker process (e.g., `uvicorn --workers 1`)** due to the in-memory queue design.
 - [ ] Use a reverse proxy like Nginx or Apache in front of the application for SSL/TLS, caching, and rate limiting.
 - [ ] Set up log rotation for the output from your WSGI server.
 - [ ] Set up monitoring to watch server health and resource usage (CPU, GPU, RAM).
 - [ ] (Optional) Add an authentication layer for private deployments.
+
+## Containerization<a name="containerization"></a>
+
+For users who prefer a self‑contained deployment, the project ships a **Dockerfile** that supports both
+CPU‑only and GPU‑enabled builds. You can also use the accompanying `docker-compose.yml` for a quick
+local setup.
+
+### Building the Image
+
+```bash
+# CPU build (default)
+docker build -t ghibli-at-home .
+
+# GPU build (requires NVIDIA Container Toolkit)
+docker build --build-arg BASE_IMAGE=nvidia/cuda:12.2.0-runtime-ubuntu22.04 -t ghibli-at-home:gpu .
+```
+
+A tagged `:cpu` or `:gpu` nomenclature is optional but helpful when pushing to a registry.
+
+### Running the Container
+
+```bash
+# basic run with environment file and port mapping
+docker run --rm -p 5000:5000 --env-file .env \
+    -v $(pwd)/generated_images:/app/generated_images \
+    -v ~/.cache/huggingface:/root/.cache/huggingface \
+    ghibli-at-home
+
+# GPU run (Docker Engine >=20.10 with nvidia runtime)
+docker run --rm --gpus all -p 5000:5000 --env-file .env \
+    -v $(pwd)/generated_images:/app/generated_images \
+    -v ~/.cache/huggingface:/root/.cache/huggingface \
+    ghibli-at-home:gpu
+```
+
+The container listens on port `5000` by default. Adjust `--port` flag by setting the `PORT` environment
+variable or passing custom arguments to `uvicorn` in the `CMD`.
+
+### Docker Compose Example
+
+The included `docker-compose.yml` simplifies volume management and GPU access (when available):
+
+```yaml
+version: "3.9"
+services:
+  app:
+    build:
+      context: .
+      args:
+        BASE_IMAGE: python:3.12-slim-bullseye  # change to CUDA image for GPU
+    env_file: .env
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./generated_images:/app/generated_images
+      - ~/.cache/huggingface:/root/.cache/huggingface
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities: [gpu]
+    runtime: nvidia  # only for GPU-enabled hosts
+```
+
+Start the stack with `docker compose up --build`.
+
+### Notes
+
+- Ensure `.env` is populated from `.env_template` before building.
+- `RESULTS_FOLDER` and Hugging Face cache mounts are optional but improve performance and
+  persistence.
+- The single-worker constraint still applies when running in a container; do not increase the
+  `--workers` count in production.
 
 ## License<a name="license"></a>
 

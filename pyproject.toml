@@ -26,6 +26,7 @@ classifiers = [
 ]
 
 dependencies = [
+    "setuptools",  # needed for pkg_resources used by the app
     "dfloat11[cuda12]>=0.2.0",
     "diffusers",
     "flask>=3.1.1",
@@ -34,18 +35,21 @@ dependencies = [
     "protobuf>=6.31.1",
     "python-dotenv>=1.1.1",
     "sentencepiece>=0.2.0",
+    "uvicorn[standard]>=0.22",
+    "asgiref>=3.7.2",
 ]
 
 [dependency-groups]
-prod = [
-    "gunicorn>=23.0.0",
-]
+prod = []
 
 [project.optional-dependencies]
 dev = [
     "pre-commit>=4.2.0",
     "ruff>=0.12.2",
     "mypy>=1.16.1",
+    "pytest>=8.0",
+    "httpx>=0.23",
+    "testcontainers>=3.0",
 ]
 
 [tool.uv]

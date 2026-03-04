@@ -1,0 +1,21 @@
+version: "3.9"
+
+services:
+  app:
+    build:
+      context: .
+      args:
+        # change this arg to a CUDA-based image for GPU support
+        BASE_IMAGE: python:3.12-slim-bullseye
+    env_file: .env
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./generated_images:/app/generated_images
+      - ~/.cache/huggingface:/root/.cache/huggingface
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities: [gpu]
+    runtime: nvidia # only needed when using GPUs

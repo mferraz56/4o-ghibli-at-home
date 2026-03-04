@@ -1,7 +1,7 @@
 #
-# For production environments, it's highly recommended to use a proper WSGI server
-# like Gunicorn instead of Flask's built-in development server.
-# Example: gunicorn --workers 1 --threads 4 --timeout 600 -b 0.0.0.0:5000 app:app
+# For production environments, it's highly recommended to use a proper ASGI server
+# like uvicorn instead of Flask's built-in development server (which is not suitable for production).
+# Example: uvicorn app:asgi_app --host 0.0.0.0 --port 5000 --workers 1
 #
 # NOTE: The `--workers 1` is crucial because the model and the job queue are in-memory
 # and not designed to be shared across multiple processes. For multi-worker scalability,
@@ -40,7 +40,7 @@ logger.add(
 )
 
 
-# Intercept standard logging to capture logs from other libraries (like Gunicorn)
+# Intercept standard logging to capture logs from other libraries (like uvicorn)
 class InterceptHandler(logging.Handler):
     def emit(self, record):
         # Filter out successful (INFO level) status polls to avoid cluttering the logs.
@@ -185,6 +185,16 @@ app.wsgi_app = ProxyFix(  # type: ignore[method-assign]
 )
 
 # The default Flask logger is now intercepted by Loguru, so no app-specific setup is needed.
+
+# Expose an ASGI-compatible app for uvicorn. We wrap the WSGI
+# application using asgiref so that users can run with uvicorn directly.
+# The `asgi_app` name is used by the Docker CMD and tests.
+try:
+    from asgiref.wsgi import WsgiToAsgi
+
+    asgi_app = WsgiToAsgi(app)
+except ImportError:  # pragma: no cover - fallback if package missing
+    asgi_app = app
 
 
 # --- Helper Functions ---
@@ -555,7 +565,7 @@ if __name__ == "__main__":
 
     logger.info(f"Starting Flask development server on port {args.port}.")
     logger.warning(
-        "This is a development server. For production, use a WSGI server like Gunicorn."
+        "This is a development server. For production, use an ASGI server like uvicorn."
     )
     # 2. Use the parsed port argument in app.run()
     app.run(
